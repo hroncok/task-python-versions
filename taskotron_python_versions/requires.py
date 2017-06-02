@@ -24,61 +24,66 @@ class DNFQuery(object):
 
     def __init__(self, release):
         self.release = release
-        self.query = None
+        self._query = None
+
+    @property
+    def query(self):
+        if not self._query:
+            self._query = self.get_dnf_query()
+        return self._query
 
     def get_packages_by(self, **kwargs):
         """Return the result of the DNF query execution,
         filtered by kwargs.
         """
-        if not self.query:
-            self.query = get_dnf_query(self.release)
-            if not self.query:
-                return []
-        return self.query.filter(**kwargs).run()
+        try:
+            return self.query.filter(**kwargs).run()
+        except AttributeError:
+            return []
 
+    @staticmethod
+    def add_repo(base, reponame, repourl):
+        try:
+            # Fedora 26
+            repo = dnf.repo.Repo(reponame, parent_conf=base.conf)
+        except TypeError:
+            # Fedora 25
+            repo = dnf.repo.Repo(reponame, cachedir=base.conf.cachedir)
 
-def add_repo(base, reponame, repourl):
-    try:
-        # Fedora 26
-        repo = dnf.repo.Repo(reponame, parent_conf=base.conf)
-    except TypeError:
-        # Fedora 25
-        repo = dnf.repo.Repo(reponame, cachedir=base.conf.cachedir)
+        metalink = ('https://mirrors.fedoraproject.org/'
+                    'metalink?repo={}&arch=$basearch'.format(repourl))
+        repo.metalink = dnf.conf.parser.substitute(metalink,
+                                                   base.conf.substitutions)
 
-    metalink = ('https://mirrors.fedoraproject.org/'
-                'metalink?repo={}&arch=$basearch'.format(repourl))
-    repo.metalink = dnf.conf.parser.substitute(metalink,
-                                               base.conf.substitutions)
+        base.repos.add(repo)
+        repo.skip_if_unavailable = False
+        repo.enable()
+        repo.load()
+        return repo
 
-    base.repos.add(repo)
-    repo.skip_if_unavailable = False
-    repo.enable()
-    repo.load()
-    return repo
+    def get_dnf_query(self):
+        """Create dnf repoquery for the release."""
+        log.debug('Creating repoquery for {}'.format(self.release))
+        base = dnf.Base()
+        base.conf.substitutions['releasever'] = self.release
 
+        # Only add fedora and updates
+        # Better to have a false PASSED than false FAILED,
+        # so we do NOT add updates-testing
+        try:
+            self.add_repo(base, 'fedora', 'fedora-$releasever')
+            self.add_repo(base, 'updates', 'updates-released-f$releasever')
+        except dnf.exceptions.RepoError as err:
+            if self.release == 'rawhide':
+                log.error('{} (rawhide)'.format(err))
+                return
+            log.warning('Failed to load repos for {}, '
+                        'assuming rawhide'.format(self.release))
+            self.release = 'rawhide'
+            return self.get_dnf_query()
 
-def get_dnf_query(release):
-    """Create dnf repoquery for the release."""
-    log.debug('Creating repoquery for {}'.format(release))
-    base = dnf.Base()
-    base.conf.substitutions['releasever'] = release
-
-    # Only add fedora and updates
-    # Better to have a false PASSED than false FAILED,
-    # so we do NOT add updates-testing
-    try:
-        add_repo(base, 'fedora', 'fedora-$releasever')
-        add_repo(base, 'updates', 'updates-released-f$releasever')
-    except dnf.exceptions.RepoError as err:
-        if release == 'rawhide':
-            log.error('{} (rawhide)'.format(err))
-            return
-        log.warning(
-            'Failed to load repos for {}, assuming rawhide'.format(release))
-        return get_dnf_query('rawhide')
-
-    base.fill_sack(load_system_repo=False, load_available_repos=True)
-    return base.sack.query()
+        base.fill_sack(load_system_repo=False, load_available_repos=True)
+        return base.sack.query()
 
 
 def get_versioned_name(require, repoquery):
