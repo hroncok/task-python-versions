@@ -14,6 +14,29 @@ the required packages, and use names with either `python2-` or
 INFO_URL = 'https://pagure.io/packaging-committee/issue/686'
 
 
+class DNFQuery(object):
+
+    """DNF Qeuery API.
+
+    Initializes the query only when needed
+    and saves it for reuse.
+    """
+
+    def __init__(self, release):
+        self.release = release
+        self.query = None
+
+    def get_packages_by(self, **kwargs):
+        """Return the result of the DNF query execution,
+        filtered by kwargs.
+        """
+        if not self.query:
+            self.query = get_dnf_query(self.release)
+            if not self.query:
+                return []
+        return self.query.filter(**kwargs).run()
+
+
 def add_repo(base, reponame, repourl):
     try:
         # Fedora 26
@@ -65,13 +88,9 @@ def get_versioned_name(require, repoquery):
 
     Return: (str) Available versioned name or None
     """
-    if not repoquery:
-        return
     log.debug('Checking requirement {}'.format(require))
 
-    query = repoquery.filter(provides=require)
-    packages = query.run()
-
+    packages = repoquery.get_packages_by(provides=require)
     for pkg in packages:
         if not is_unversioned(pkg.name):
             log.debug(
@@ -115,7 +134,7 @@ def task_requires_naming_scheme(packages, koji_build, artifact):
     from libtaskotron import check
 
     fedora_release = koji_build.split('fc')[-1]
-    repoquery = get_dnf_query(fedora_release)
+    repoquery = DNFQuery(fedora_release)
 
     outcome = 'PASSED'
 
