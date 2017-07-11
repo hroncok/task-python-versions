@@ -48,7 +48,8 @@ def check_naming_policy(pkg, name_by_version):
     missing_prefix = (
         'python' not in pkg.name and
         has_pythonX_package(pkg.name, name_by_version, 3) and
-        not has_pythonX_package(pkg.name, name_by_version, 2)
+        not has_pythonX_package(pkg.name, name_by_version, 2) and
+        3 not in pkg.py_versions
     )
     if is_unversioned(pkg.name) or missing_prefix:
         return True
