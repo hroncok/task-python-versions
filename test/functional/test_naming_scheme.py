@@ -5,6 +5,7 @@ from taskotron_python_versions.naming_scheme import (
     is_unversioned,
     check_naming_policy,
 )
+from taskotron_python_versions.two_three import check_two_three
 
 from .common import gpkg
 
@@ -14,7 +15,9 @@ from .common import gpkg
     ('python-peak-rules*', {2: ('python-peak-rules',)}),
 ))
 def test_package_is_misnamed(pkgglob, name_by_version):
-    assert check_naming_policy(gpkg(pkgglob), name_by_version)
+    pkg = gpkg(pkgglob)
+    check_two_three(pkg)  # populate py_versions
+    assert check_naming_policy(pkg, name_by_version)
 
 
 @pytest.mark.parametrize(('pkgglob', 'name_by_version'), (
@@ -23,7 +26,9 @@ def test_package_is_misnamed(pkgglob, name_by_version):
     ('tracer*', {3: ('tracer',)}),
 ))
 def test_package_is_named_correctly(pkgglob, name_by_version):
-    assert not check_naming_policy(gpkg(pkgglob), name_by_version)
+    pkg = gpkg(pkgglob)
+    check_two_three(pkg)  # populate py_versions
+    assert not check_naming_policy(pkg, name_by_version)
 
 
 @pytest.mark.parametrize('name', (
@@ -66,3 +71,11 @@ def test_has_pythonX_package_positive(pkg_name, name_by_version, version):
 ))
 def test_has_pythonX_package_negative(pkg_name, name_by_version, version):
     assert not has_pythonX_package(pkg_name, name_by_version, version)
+
+
+def test_separate_app_package_is_not_reported():
+    '''https://github.com/fedora-python/taskotron-python-versions/issues/25'''
+    pkg = gpkg('vdirsyncer*')
+    check_two_three(pkg)  # populate py_versions
+    name_by_version = {3: {'vdirsyncer', 'python3-vdirsyncer'}, 2: set()}
+    assert not check_naming_policy(pkg, name_by_version)
