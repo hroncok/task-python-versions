@@ -6,14 +6,16 @@ from .common import gpkg
 
 
 @pytest.mark.parametrize('pkgglob', ('pyserial*', 'python-peak-rules*',
-                                     'python2-geoip2*'))
+                                     'python2-geoip2*',
+                                     'redhat-lsb-languages-*.fc30.*',))
 def test_package_depends_on_2_only(pkgglob):
     name, versions = check_two_three(gpkg(pkgglob))
     assert 2 in versions
     assert 3 not in versions
 
 
-@pytest.mark.parametrize('pkgglob', ('python3-pyserial*',))
+@pytest.mark.parametrize('pkgglob', ('python3-pyserial*',
+                                     'redhat-lsb-languages-*.fc31.*',))
 def test_package_depends_on_3_only(pkgglob):
     name, versions = check_two_three(gpkg(pkgglob))
     assert 2 not in versions

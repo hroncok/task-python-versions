@@ -8,7 +8,6 @@ NEVRS_STARTS = {
 
 NAME_STARTS = {
     2: (
-        'python-',
         'python2',
         '/usr/bin/python2',
         'libpython2',
@@ -22,15 +21,16 @@ NAME_STARTS = {
         '/usr/bin/python3',
         'libpython3',
         'system-python'
-    )
+    ),
+    0: (
+        'python-',
+    ),
 }
 
-NAME_EXACTS = {
-    2: (
-        '/usr/bin/python',
-        'python',
-    )
-}
+NAME_EXACTS = (
+    '/usr/bin/python',
+    'python',
+)
 
 NAME_NOTS = (
     'python-rpm-macros',
@@ -87,6 +87,11 @@ def check_two_three(package):
     '''
     py_versions = {}
 
+    # On Fedora 31+ python means python3
+    ambiguous_version = 3
+    if package.fedora_version and package.fedora_version < 31:
+        ambiguous_version = 2
+
     for nevr in package.require_nevrs:
         for py_version, starts in NEVRS_STARTS.items():
             if nevr.startswith(starts):
@@ -96,18 +101,19 @@ def check_two_three(package):
 
     for name in package.require_names:
         for py_version, starts in NAME_STARTS.items():
+            if py_version == 0:
+                py_version = ambiguous_version
             if py_version not in py_versions:
                 if name.startswith(starts) and name not in NAME_NOTS:
                     log.debug('Found dependency {}'.format(name))
                     log.debug('Requires Python {}'.format(py_version))
                     py_versions[py_version] = name
 
-        for py_version, exacts in NAME_EXACTS.items():
-            if py_version not in py_versions:
-                if name in exacts:
-                    log.debug('Found dependency {}'.format(name))
-                    log.debug('Requires Python {}'.format(py_version))
-                    py_versions[py_version] = name
+        if ambiguous_version not in py_versions:
+            if name in NAME_EXACTS:
+                log.debug('Found dependency {}'.format(name))
+                log.debug('Requires Python {}'.format(ambiguous_version))
+                py_versions[ambiguous_version] = name
 
     package.py_versions = set(py_versions)
     return package.name, py_versions

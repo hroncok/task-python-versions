@@ -131,3 +131,16 @@ class Package:
     def files(self):
         """Package file names as a list of strings."""
         return [surrogate(name) for name in self.hdr[rpm.RPMTAG_FILENAMES]]
+
+    @property
+    def fedora_version(self):
+        """Fedora version based on the dist tag (not 100% accurate).
+        None if unknown."""
+        *_, release = self.nvr.rpartition('-')
+        for part in release.split('.'):
+            if part.startswith('fc'):
+                try:
+                    return int(part[2:])
+                except ValueError:
+                    continue
+        return None
